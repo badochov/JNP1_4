@@ -289,7 +289,7 @@ class Computer {
     template <typename P>
     constexpr static auto boot() {
         memory_t memory{0};
-        return ASBProgram<P>::evaluate(memory);
-        //        return memory;
+        ASBProgram<P>::evaluate(memory);
+        return memory;
     }
 };
