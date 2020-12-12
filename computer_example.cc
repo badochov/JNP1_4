@@ -59,6 +59,7 @@ using tmpasm_helloworld = Program<
         Mov<Mem<Mem<Num<10>>>, Num<'d'>>>;
 
 int main() {
+//    auto a = Computer<1, int8_t>::boot<tmpasm_move>();
     static_assert(compare(
             Computer<1, int8_t>::boot<tmpasm_move>(),
             std::array<int8_t, 1>({42})),

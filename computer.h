@@ -8,7 +8,7 @@ using id_t = unsigned int;
 
 constexpr id_t Id(const char *input) {
     id_t base = 42;
-    id_t x = 0;
+    id_t x = 1;
 
     assert(input[0] != '\0');
     id_t base2 = 1;
@@ -22,9 +22,9 @@ constexpr id_t Id(const char *input) {
         if ('0' <= input[i] && input[i] <= '9') //[0-9]
             integer = input[i] - '0';
         if ('A' <= input[i] && input[i] <= 'Z') //[A-Z]
-            integer = input[i] - 'A';
+            integer = input[i] - 'A' + 10;
         if ('a' <= input[i] && input[i] <= 'z') //[a-z]
-            integer = input[i] - 'a';
+            integer = input[i] - 'a' + 10;
 
         x += base2 * integer;
         base2 *= base;
@@ -93,13 +93,13 @@ struct Inc : Instruction {};
 template <typename Expr>
 struct Dec : Instruction {};
 
-template <typename Expr, typename... RestExpr>
+template <typename... Instrucions>
 struct Program {};
 
 template <typename... Ts>
 struct dependent_false : std::false_type {};
 
-template <std::size_t size, typename T> // Tu pewnie trzeba cos zmienic
+template <std::size_t size, typename T>
 class Computer {
     using memory_t = std::array<T, size>;
 
@@ -123,16 +123,12 @@ class Computer {
         }
 
         constexpr int idx(id_t id) {
-            for (typename vars_memory_t::size_t i = 0; i < size; i++) {
+            for (std::size_t i = 0; i < size; i++) {
                 if (vars[i] == id) {
                     return i;
                 }
             }
             return -1;
-        }
-
-        constexpr int &get(id_t id) {
-            return vars[id];
         }
 
         constexpr void set_flag_ZF(T lval) {
@@ -181,18 +177,18 @@ class Computer {
         }
     };
 
-    template <id_t id, auto num, typename... Rest>
-    struct Declarations<D<id, Num<num>>, Rest...> {
+    template <id_t id, auto num, typename... Instructions>
+    struct Declarations<D<id, Num<num>>, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
             int idx = program_mem.add(id);
             mem[idx] = num;
 
-            Declarations<Rest...>::declare_variables(mem, program_mem);
+            Declarations<Instructions...>::declare_variables(mem, program_mem);
         }
     };
 
-    template <id_t id, typename Val, typename... Rest>
-    struct Declarations<D<id, Val>, Rest...> {
+    template <id_t id, typename Val, typename... Instructions>
+    struct Declarations<D<id, Val>, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
             static_assert(dependent_false<Val>::value, "D's second parameter should be Num");
         }
@@ -202,6 +198,13 @@ class Computer {
     struct Evaluator {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
             return program_mem.sough_label;
+        }
+    };
+
+    template <id_t id, typename Val, typename... Instructions>
+    struct Evaluator<D<id, Val>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
 
@@ -223,8 +226,8 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Mov<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0)
-                LValueEvaluator<L>::get_reference(program_mem) = RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0)
+                LValueEvaluator<L>::get_reference(mem, program_mem) = RValueEvaluator<R>::get_value(mem, program_mem);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
@@ -266,9 +269,9 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Add<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0 ) {
-                auto &lref = LValueEvaluator<L>::get_reference(program_mem);
-                lref += RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0 ) {
+                auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
+                lref += RValueEvaluator<R>::get_value(mem, program_mem);
                 program_mem.set_flags(lref);
             }
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -278,28 +281,36 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Sub<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0) {
-                auto &lref = LValueEvaluator<L>::get_reference(program_mem);
-                lref -= RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0) {
+                auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
+                lref -= RValueEvaluator<R>::get_value(mem, program_mem);
                 program_mem.set_flags(lref);
             }
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
 
-    template <typename L>
-    using Inc = Add<L, Num<1>>;
+    template <typename L, typename... Instructions>
+    struct Evaluator<Inc<L>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            return Evaluator<Add<L, Num<1>>, Instructions...>::evaluate(mem, program_mem);
+        }
+    };
 
-    template <typename L>
-    using Dec = Sub<L, Num<1>>;
+    template <typename L, typename... Instructions>
+    struct Evaluator<Dec<L>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            return Evaluator<Sub<L, Num<1>>, Instructions...>::evaluate(mem, program_mem);
+        }
+    };
 
     //Logic functions
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Cmp<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0) {
-                auto lref = LValueEvaluator<L>::get_reference(program_mem);
-                lref -= RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0) {
+                auto lref = LValueEvaluator<L>::get_reference(mem, program_mem);
+                lref -= RValueEvaluator<R>::get_value(mem, program_mem);
                 program_mem.set_flags(lref);
             }
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -309,9 +320,9 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<And<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0) {
-                auto &lref = LValueEvaluator<L>::get_reference(program_mem);
-                lref &= RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0) {
+                auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
+                lref &= RValueEvaluator<R>::get_value(mem, program_mem);
                 program_mem.set_flag_ZF(lref);
             }
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -321,9 +332,9 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Or<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0) {
-                auto &lref = LValueEvaluator<L>::get_reference(program_mem);
-                lref |= RValueEvaluator<R>::get_value(program_mem);
+            if (program_mem.sough_label == 0) {
+                auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
+                lref |= RValueEvaluator<R>::get_value(mem, program_mem);
                 program_mem.set_flag_ZF(lref);
             }
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -333,8 +344,8 @@ class Computer {
     template <typename L, typename... Instructions>
     struct Evaluator<Not<L>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.sough_label != 0) {
-                auto &lref = LValueEvaluator<L>::get_reference(program_mem);
+            if (program_mem.sough_label == 0) {
+                auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
                 lref = ~lref;
                 program_mem.set_flag_ZF(lref);
             }
@@ -344,12 +355,16 @@ class Computer {
 
     //LValueEvaluator
     template <typename L>
-    struct LValueEvaluator {};
+    struct LValueEvaluator {
+        constexpr static auto &get_reference(memory_t &mem, asb_program_memory_t &program_mem) {
+            static_assert(dependent_false<L>::value, "WTf");
+        }
+    };
 
     template <typename L>
     struct LValueEvaluator<Mem<L>> {
-        constexpr static auto &get_reference(asb_program_memory_t &program_mem) {
-            return program_mem.get(L::get_value);
+        constexpr static auto &get_reference(memory_t &mem, asb_program_memory_t &program_mem) {
+            return mem[RValueEvaluator<L>::get_value(mem, program_mem)];
         }
     };
 
@@ -359,22 +374,23 @@ class Computer {
 
     template <auto id>
     struct RValueEvaluator<Num<id>> {
-        constexpr static auto get_value(asb_program_memory_t &program_mem) {
+        constexpr static auto get_value(memory_t &mem, asb_program_memory_t &program_mem) {
             return id;
         }
     };
 
     template <auto id>
     struct RValueEvaluator<Lea<id>> {
-        constexpr static auto get_value(asb_program_memory_t &program_mem) {
+        constexpr static auto get_value(memory_t &mem, asb_program_memory_t &program_mem) {
             return program_mem.idx(id);
         }
     };
 
     template <typename R>
     struct RValueEvaluator<Mem<R>> {
-        constexpr static auto get_value(asb_program_memory_t &program_mem) {
-            return program_mem.get(R::get_value);
+        constexpr static auto &get_value(memory_t &mem, asb_program_memory_t &program_mem) {
+            //auto id = program_mem.idx();
+            return mem[RValueEvaluator<R>::get_value(mem, program_mem)];
         }
     };
 
