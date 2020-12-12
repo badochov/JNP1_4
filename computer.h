@@ -4,12 +4,14 @@
 #include <iostream>
 #include <map>
 
-constexpr unsigned int Id(const char *input) {
-    unsigned int base = 42;
-    unsigned int x = 0;
+using id_t = unsigned int;
+
+constexpr id_t Id(const char *input) {
+    id_t base = 42;
+    id_t x = 0;
 
     assert(input[0] != '\0');
-    unsigned int base2 = 1;
+    id_t base2 = 1;
     for (std::size_t i = 0; input[i] != '\0'; i++) {
         if (i == 6)
             assert(false);
@@ -28,7 +30,7 @@ constexpr unsigned int Id(const char *input) {
         base2 *= base;
     }
 
-    const unsigned int result = x;
+    const id_t result = x;
     return result;
 }
 
@@ -46,19 +48,19 @@ struct Num {
 template <typename Dst, typename Src>
 struct Mov {};
 
-template <unsigned int Expr>
+template <id_t Expr>
 struct Jmp {};
 
-template <unsigned int Expr>
+template <id_t Expr>
 struct Jz {};
 
-template <unsigned int Expr>
+template <id_t Expr>
 struct Js {};
 
-template <unsigned int Expr>
-struct Label {};
+template <id_t Expr>
+struct Label : Instruction {};
 
-template <unsigned int Expr>
+template <id_t Expr>
 struct Lea {};
 
 template <typename Left, typename Right>
@@ -67,7 +69,7 @@ struct Add {};
 template <typename Left, typename Right>
 struct Sub {};
 
-template <unsigned int Left, typename Right>
+template <id_t Left, typename Right>
 struct D : Instruction {};
 
 template <typename Expr>
@@ -89,10 +91,18 @@ template <std::size_t size, typename T> // Tu pewnie trzeba cos zmienic
 class Computer {
     using memory_t = std::array<T, size>;
 
-    using vars_memory_t = std::array<unsigned int, size>;
+    using vars_memory_t = std::array<id_t, size>;
+
+    using asb_program_memory_t = struct {
+        using flag_t = bool;
+        vars_memory_t vars{0};
+        id_t sough_label = 0;
+        flag_t ZF = false;
+        flag_t SF = false;
+    };
 
     struct Variables {
-        constexpr static int add(unsigned int id, vars_memory_t &vars) {
+        constexpr static int add(id_t id, vars_memory_t &vars) {
             for (std::size_t i = 0; i < size; i++) {
                 if (vars[i] == 0) {
                     vars[i] = id;
@@ -102,13 +112,13 @@ class Computer {
             return -1;
         }
 
-        constexpr int idx(unsigned int id, vars_memory_t &vars) {
+        constexpr int idx(id_t id, vars_memory_t &vars) {
             for (typename vars_memory_t::size_t i = 0; i < size; i++) {
                 if (vars[i] == id) {
                     return i;
                 }
             }
-            assert(false);
+            return -1;
         }
     };
 
@@ -119,57 +129,71 @@ class Computer {
     };
     template <typename... Instructions>
     struct ASBProgram<Program<Instructions...>> {
-        using instructions_memory_t = std::array<Instruction, sizeof...(Instructions)>;
-        constexpr static auto evaluate(memory_t &mem, vars_memory_t &vars) {
-            instructions_memory_t instructions_memory{};
-            static_assert(((std::is_base_of<Instruction, Instructions>::value) && ...),
-                          "Error: program should consist only of instructions!");
-            Declarations<Instructions...>::declare_variables(mem, vars);
-//            EvalHelper<0, mem, vars, Instructions...>::res;
-
-            return vars;
+        constexpr static auto evaluate(memory_t &mem) {
+            asb_program_memory_t asb_program_memory{};
+            Declarations<Instructions...>::declare_variables(mem, asb_program_memory);
+            id_t id = Evaluator<Instructions...>::evaluate(mem, asb_program_memory);
+            assert(id == 0);
+            return asb_program_memory;
         }
     };
 
     // Structs responsible for initial declarations.
     template <typename... Instructions>
     struct Declarations {
-        constexpr static void declare_variables(memory_t &mem, vars_memory_t &vars) {
-            static_assert(sizeof...(Instructions) == 0,
-                          "Program should contain only instructions!");
+        constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
         }
     };
 
     template <typename Ins, typename... Instructions>
     struct Declarations<Ins, Instructions...> {
-        constexpr static void declare_variables(memory_t &mem, vars_memory_t &vars) {
+        constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
             static_assert(std::is_base_of<Instruction, Ins>::value,
                           "Program should contain only instructions!");
-            Declarations<Instructions...>::declare_variables(mem, vars);
+            Declarations<Instructions...>::declare_variables(mem, program_mem);
+        }
+    };
+
+    template <id_t id, typename Val, typename... Rest>
+    struct Declarations<D<id, Val>, Rest...> {
+        constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
+            int idx = Variables::add(id, program_mem.vars);
+            mem[idx] = Val::value;
+
+            Declarations<Rest...>::declare_variables(mem, program_mem);
         }
     };
 
     template <typename... Instructions>
-    struct Declarations<Instruction, Instructions...> {
-        constexpr static void declare_variables(memory_t &mem, vars_memory_t &vars) {
-            Declarations<Instructions...>::declare_variables(mem, vars);
-        }
-    };
-
-    template <unsigned int id, typename Val, typename... Rest>
-    struct Declarations<D<id, Val>, Rest...> {
-        constexpr static void declare_variables(memory_t &mem, vars_memory_t &vars) {
-            int idx = Variables::add(id, vars);
-            mem[idx] = Val::value;
-
-            Declarations<Rest...>::declare_variables(mem, vars);
-        }
-    };
-
-    template <unsigned int id, typename... Instructions>
     struct Evaluator {
-        constexpr static unsigned int evaluate(memory_t &mem, vars_memory_t &vars) {
-            return 0;
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            ;
+            return program_mem.sough_label;
+        }
+    };
+
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Label<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            int sought_id = program_mem.sough_label;
+            do {
+                if (sought_id == id) {
+                    program_mem.sough_label = 0;
+                }
+                sought_id = Evaluator<Instructions...>::evaluate(mem, program_mem);
+            } while (sought_id == id);
+
+            return sought_id;
+        }
+    };
+
+    template <T id, typename... Instructions>
+    struct Evaluator<Num<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label != 0) {
+                return Evaluator<Instructions...>::evaluate(mem, program_mem);
+            }
+            // Perform Action
         }
     };
 
@@ -177,7 +201,6 @@ class Computer {
     template <typename P>
     constexpr static auto boot() {
         memory_t memory{0};
-        vars_memory_t vars{0};
-        return ASBProgram<P>::evaluate(memory, vars);
+        return ASBProgram<P>::evaluate(memory);
     }
 };
