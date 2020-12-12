@@ -6,17 +6,21 @@
 
 using identifier_t = int32_t;
 
+//Returns identifier for provided [input]. Big and small letters are undifferentiated.
 constexpr identifier_t Id(const char *input) {
     identifier_t base = 42;
     identifier_t x = 1;
 
-    assert(input[0] != '\0');
+    if (input[0] == '\0')
+        throw std::invalid_argument("Input should be not empty");
     identifier_t base2 = 1;
     for (std::size_t i = 0; input[i] != '\0'; i++) {
         if (i == 6)
-            assert(false);
-        assert(('0' <= input[i] && input[i] <= '9') || ('A' <= input[i] && input[i] <= 'Z') ||
-               ('a' <= input[i] && input[i] <= 'z'));
+            throw std::invalid_argument("Input's size is over the limit of 6 characters");
+        if (!(('0' <= input[i] && input[i] <= '9') ||
+             ('A' <= input[i] && input[i] <= 'Z') ||
+             ('a' <= input[i] && input[i] <= 'z')))
+            throw std::invalid_argument("Input's letters should be letters or numbers");
         int integer = 0;
 
         if ('0' <= input[i] && input[i] <= '9') //[0-9]
@@ -44,6 +48,7 @@ struct Lea {};
 
 template <typename PValue>
 struct Mem {};
+
 
 template <typename LValue, typename PValue>
 struct Mov : Instruction {};
@@ -94,6 +99,7 @@ template <std::size_t size, typename MemoryWordType>
 class Computer {
     using memory_t = std::array<MemoryWordType, size>;
 
+    //Memory of the computer.
     using asb_program_memory_t = struct ASBProgramMemory {
         using flag_t = bool;
 
@@ -104,67 +110,64 @@ class Computer {
         identifier_t sought_label = 0;
         flag_t ZF = false;
         flag_t SF = false;
+        vars_size_t last_index = 0;
 
+        //Assigns the identifier to one of memory's cells.
+        //Throws an error if there are more assigned identifiers than memory's cells.
         constexpr vars_size_t add(identifier_t id) {
-            vars_size_t res = 0;
-            bool found = false;
-            for (vars_size_t i = 0; i < size; i++) {
-                if (vars[i] == 0) {
-                    vars[i] = id;
-                    found = true;
-                    res = i;
-                    break;
-                }
-            }
+            if (last_index == size)
+                throw std::invalid_argument("Too many variables");
 
-            if (found) {
-                return res;
-            } else {
-                assert(((void)"Too many variables", false));
-            }
+            vars[last_index] = id;
+            return last_index++;
         }
 
+        //Finds which index of the memory identifier is assigned to and returns it.
+        //Throws an error if it can't find it.
         constexpr vars_size_t idx(identifier_t id) {
             vars_size_t res = 0;
             bool found = false;
             for (vars_size_t i = 0; i < size; i++) {
                 if (vars[i] == id) {
                     found = true;
-                    res = i;
-                    break;
+                    return i;
                 }
             }
-
-            if (found) {
-                return res;
-            } else {
-                assert(((void)"Variable not found", false));
-            }
+            if (!found)
+                throw std::invalid_argument("Variable not found");
         }
 
+        //Sets the flag ZF based on last changed value.
         constexpr void set_flag_ZF(MemoryWordType value) {
             ZF = value == 0;
         }
 
+        //Sets the flag SF based on last changed value.
         constexpr void set_flag_SF(MemoryWordType value) {
             SF = value < 0;
         }
 
+        //Sets up both flags based on last changed value.
         constexpr void set_flags(MemoryWordType value) {
             set_flag_ZF(value);
             set_flag_SF(value);
         }
 
+        //Returns whether the program is currently searching for a label or not.
         constexpr bool not_searching_for_label() {
             return sought_label == 0;
         }
     };
 
+    //Helper to return false at any point in the evaluator.
     template <typename...>
     struct FailHelper : std::false_type {};
 
     template <typename P>
     struct ASBProgram {};
+
+    //Main backbone of the computer. First declares all variables
+    //it can find and then evaluates the program.
     template <typename... Instructions>
     struct ASBProgram<Program<Instructions...>> {
         constexpr static auto evaluate(memory_t &mem) {
@@ -175,7 +178,8 @@ class Computer {
                 Evaluator<Instructions...>::evaluate(mem, asb_program_memory);
                 id = asb_program_memory.sought_label;
             } while (id > 0);
-            assert(id == 0);
+            if (id != 0)
+                throw std::exception();
             return asb_program_memory;
         }
     };
@@ -187,6 +191,7 @@ class Computer {
         }
     };
 
+    //Checks whether other instructions are proper instructions but skips its evaluation.
     template <typename PotentialInstruction, typename... Instructions>
     struct Declarations<PotentialInstruction, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -196,6 +201,7 @@ class Computer {
         }
     };
 
+    //Assigns the identifier to first free memory's cell and assigns value [num] to it.
     template <identifier_t id, auto num, typename... Instructions>
     struct Declarations<D<id, Num<num>>, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -206,6 +212,7 @@ class Computer {
         }
     };
 
+    //Since the second parameter of D is not a Num instruction it throws an error.
     template <identifier_t id, typename Val, typename... Instructions>
     struct Declarations<D<id, Val>, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -213,15 +220,19 @@ class Computer {
         }
     };
 
+    //Should only enter here after program's last operation.
+    //Checks whether computer was searching for a label.
+    //If it was throw an exception.
     template <typename... Instructions>
     struct Evaluator {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
             if (!program_mem.not_searching_for_label()) {
-                assert(((void)"Label not found", false));
+                throw std::invalid_argument("Label not found");
             }
         }
     };
 
+    //Skips declarations.
     template <identifier_t id, typename Val, typename... Instructions>
     struct Evaluator<D<id, Val>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -229,6 +240,7 @@ class Computer {
         }
     };
 
+    //If program tries to jump to the label [id] it should resume evaluation, skip otherwise.
     template <identifier_t id, typename... Instructions>
     struct Evaluator<Label<id>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -239,17 +251,8 @@ class Computer {
         }
     };
 
-    template <typename LValue, typename RValue, typename... Instructions>
-    struct Evaluator<Mov<LValue, RValue>, Instructions...> {
-        constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            if (program_mem.not_searching_for_label()) {
-                LValueEvaluator<LValue>::get_reference(mem, program_mem) =
-                    RValueEvaluator<RValue>::get_value(mem, program_mem);
-            }
-            Evaluator<Instructions...>::evaluate(mem, program_mem);
-        }
-    };
-
+    //Unless the program is already during a jump,
+    //performs the unconditional jump.
     template <identifier_t label_id, typename... Instructions>
     struct Evaluator<Jmp<label_id>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -261,6 +264,8 @@ class Computer {
         }
     };
 
+    //Unless the program is already during a jump,
+    //performs conditional jump based on flag ZF.
     template <identifier_t label_id, typename... Instructions>
     struct Evaluator<Jz<label_id>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -273,6 +278,8 @@ class Computer {
         }
     };
 
+    //Unless the program is already during a jump,
+    //performs conditional jump based on flag ZS.
     template <identifier_t label_id, typename... Instructions>
     struct Evaluator<Js<label_id>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -284,7 +291,20 @@ class Computer {
         }
     };
 
-    // Arithmetic functions
+    //Assigns value of RValue to LValue.
+    template <typename LValue, typename RValue, typename... Instructions>
+    struct Evaluator<Mov<LValue, RValue>, Instructions...> {
+        constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.not_searching_for_label()) {
+                LValueEvaluator<LValue>::get_reference(mem, program_mem) =
+                    RValueEvaluator<RValue>::get_value(mem, program_mem);
+            }
+            Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
+    //Arithmetic functions.
+    //Adds value of RValue to LValue and sets flags if needed.
     template <typename LValue, typename RValue, typename... Instructions>
     struct Evaluator<Add<LValue, RValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -297,6 +317,7 @@ class Computer {
         }
     };
 
+    //Subtracts value of RValue to LValue and sets flags if needed.
     template <typename LValue, typename RValue, typename... Instructions>
     struct Evaluator<Sub<LValue, RValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -309,6 +330,7 @@ class Computer {
         }
     };
 
+    //Increments value LValue by 1 and sets flags if needed.
     template <typename LValue, typename... Instructions>
     struct Evaluator<Inc<LValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -316,6 +338,7 @@ class Computer {
         }
     };
 
+    //Decrements value RValue by 1 and sets flags if needed.
     template <typename LValue, typename... Instructions>
     struct Evaluator<Dec<LValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -323,19 +346,21 @@ class Computer {
         }
     };
 
-    // Logic functions
-    template <typename LValue, typename RValue, typename... Instructions>
-    struct Evaluator<Cmp<LValue, RValue>, Instructions...> {
+    //Logic functions.
+    //Compares two arguments and sets flags if needed.
+    template <typename RValue, typename RValue2, typename... Instructions>
+    struct Evaluator<Cmp<RValue, RValue2>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
             if (program_mem.not_searching_for_label()) {
-                auto lref = LValueEvaluator<LValue>::get_reference(mem, program_mem);
-                lref -= RValueEvaluator<RValue>::get_value(mem, program_mem);
+                auto lref = RValueEvaluator<RValue>::get_value(mem, program_mem);
+                lref -= RValueEvaluator<RValue2>::get_value(mem, program_mem);
                 program_mem.set_flags(lref);
             }
             Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
 
+    //Performs AND logic operator on both parameters and stores its result in first one.
     template <typename LValue, typename RValue, typename... Instructions>
     struct Evaluator<And<LValue, RValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -348,6 +373,7 @@ class Computer {
         }
     };
 
+    //Performs OR logic operator on both parameters and stores its result in first one.
     template <typename LValue, typename RValue, typename... Instructions>
     struct Evaluator<Or<LValue, RValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -360,6 +386,8 @@ class Computer {
         }
     };
 
+    //Performs NOT logic operator on LValue and stores its result.
+    //Sets flag ZF if needed.
     template <typename LValue, typename... Instructions>
     struct Evaluator<Not<LValue>, Instructions...> {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -372,7 +400,7 @@ class Computer {
         }
     };
 
-    // LValueEvaluator
+    //Evaluates l-values of the program. If the l-value is not a Mem function throws an error.
     template <typename LValue>
     struct LValueEvaluator {
         constexpr static auto &get_reference(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -380,6 +408,7 @@ class Computer {
         }
     };
 
+    //Returns the reference to what RValue is pointing to.
     template <typename RValue>
     struct LValueEvaluator<Mem<RValue>> {
         constexpr static auto &get_reference(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -387,10 +416,11 @@ class Computer {
         }
     };
 
-    // RValueEvaluator
+    //Evaluates r-values of the program.
     template <typename RValue>
     struct RValueEvaluator {};
 
+    //Returns its id.
     template <auto id>
     struct RValueEvaluator<Num<id>> {
         constexpr static auto get_value(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -398,6 +428,7 @@ class Computer {
         }
     };
 
+    //Returns index of memory to which identifier id is assigned.
     template <auto id>
     struct RValueEvaluator<Lea<id>> {
         constexpr static auto get_value(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -405,6 +436,7 @@ class Computer {
         }
     };
 
+    //Returns reference to memory of index of RValue.
     template <typename RValue>
     struct RValueEvaluator<Mem<RValue>> {
         constexpr static auto &get_value(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -414,6 +446,7 @@ class Computer {
     };
 
   public:
+    //Boots the computer and performs evaluations of the program.
     template <typename P>
     constexpr static auto boot() {
         memory_t memory{0};

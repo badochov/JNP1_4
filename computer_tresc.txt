@@ -42,6 +42,7 @@ Podstawowe elementy języka TMPAsm:
 * Pobranie efektywnego adresu zmiennej Lea
   Lea<Id> – zwraca wartość efektywnego adresu zmiennej Id.
   Przykłady poprawnych pobrań adresu zmiennej:
+
   Lea<Id("A")>, Lea<Id("a")>.
 
 * Poprawna lewa wartość (l-wartość) w TMPAsm to Mem.
