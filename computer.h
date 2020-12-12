@@ -123,16 +123,12 @@ class Computer {
         }
 
         constexpr int idx(id_t id) {
-            for (typename vars_memory_t::size_t i = 0; i < size; i++) {
+            for (std::size_t i = 0; i < size; i++) {
                 if (vars[i] == id) {
                     return i;
                 }
             }
             return -1;
-        }
-
-        constexpr int &get(id_t id) {
-            return vars[id];
         }
 
         constexpr void set_flag_ZF(T lval) {
@@ -223,7 +219,9 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Mov<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            LValueEvaluator<L>::get_referecence(program_mem) = RValueEvaluator<R>::get_value(program_mem);
+            LValueEvaluator<L>::get_reference(mem, program_mem);
+            //            =
+            RValueEvaluator<R>::get_value(program_mem);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
@@ -231,7 +229,7 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Add<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto &lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref += RValueEvaluator<R>::get_value(program_mem);
             program_mem.set_flags(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -274,7 +272,7 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Sub<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto &lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref -= RValueEvaluator<R>::get_value(program_mem);
             program_mem.set_flags(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -284,7 +282,7 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Cmp<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref -= RValueEvaluator<R>::get_value(program_mem);
             program_mem.set_flags(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -294,7 +292,7 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<And<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto &lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref &= RValueEvaluator<R>::get_value(program_mem);
             program_mem.set_flag_ZF(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -304,7 +302,7 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Or<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto &lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref |= RValueEvaluator<R>::get_value(program_mem);
             program_mem.set_flag_ZF(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -314,7 +312,7 @@ class Computer {
     template <typename L, typename... Instructions>
     struct Evaluator<Not<L>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            auto &lref = LValueEvaluator<L>::get_referecence(program_mem);
+            auto &lref = LValueEvaluator<L>::get_reference(mem, program_mem);
             lref = ~lref;
             program_mem.set_flag_ZF(lref);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
@@ -328,12 +326,17 @@ class Computer {
     using Dec = Sub<L, Num<1>>;
 
     template <typename L>
-    struct LValueEvaluator {};
+    struct LValueEvaluator {
+        constexpr static auto &get_reference(asb_program_memory_t &program_mem) {
+            static_assert(dependent_false<L>::value, "WTf");
+        }
+    };
 
     template <typename L>
     struct LValueEvaluator<Mem<L>> {
-        constexpr static auto &get_reference(asb_program_memory_t &program_mem) {
-            return program_mem.get(L::get_value);
+        constexpr static auto &get_reference(memory_t &mem, asb_program_memory_t &program_mem) {
+            auto idx = program_mem.idx(RValueEvaluator<L>::get_value(program_mem));
+            return mem[idx];
         }
     };
 
