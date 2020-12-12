@@ -67,11 +67,11 @@ using test_underflow = Program<
 
 using test_finite_loop = Program<
         Label<Id("loop")>,
-        Dec<Mem<Lea<Id("MEM0")>>>,
+        Inc<Mem<Lea<Id("MEM0")>>>,
         Js<Id("LOOP")>,
-        D<Id("mem0"), Num<INT32_MIN + 100>>
+        D<Id("mem0"), Num<-100>>
 >;
-//constexpr auto test_finite_loop_res = test_machine::boot<test_finite_loop>();
+constexpr auto test_finite_loop_res = test_machine::boot<test_finite_loop>();
 
 
 // tests that should not compile (i.e. template parsing error):
@@ -81,7 +81,7 @@ using test_finite_loop = Program<
 
 //using test_bad_id2 = Program<
 //        Label<Id("3324234")>>;
-
+//
 //using test_bad_syntax1 = Program<
 //        Inc<Lea<Lea<Id("a")>>>>;
 
@@ -141,13 +141,11 @@ using test_D_syntax2 = Program<
 
 
 
-//int main() {
-//
-//
-//test_machine::boot<test_finite_loop>();
-//test_machine::boot<test_id1>();
-//
-//auto arr = test_machine::boot<test_id1>();
-//for (auto itr : arr)
-//    std::cout << (int) itr << std::endl;
-//}
+int main() {
+    test_machine::boot<test_finite_loop>();
+    test_machine::boot<test_id1>();
+
+    auto arr = test_machine::boot<test_id1>();
+    for (auto itr : arr)
+        std::cout << (int)itr << std::endl;
+}
