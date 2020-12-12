@@ -34,52 +34,54 @@ constexpr id_t Id(const char *input) {
     return result;
 }
 
+struct Numeric {};
+
 struct PValue {};
 
 struct LValue {};
 
 struct Instruction {};
 
-template <uint64_t N> // Tu pewnie trzeba cos zmienic
-struct Num {
+template <auto N> // Tu pewnie trzeba cos zmienic
+struct Num : Numeric, PValue {
     static const uint64_t value = N;
 };
 
+template <id_t Expr>
+struct Lea : Numeric, PValue {};
+
+template <typename Expr>
+struct Mem : Numeric, PValue, LValue {};
+
 template <typename Dst, typename Src>
-struct Mov {};
+struct Mov : Instruction {};
 
 template <id_t Expr>
-struct Jmp {};
+struct Jmp : Instruction {};
 
 template <id_t Expr>
-struct Jz {};
+struct Jz : Instruction {};
 
 template <id_t Expr>
-struct Js {};
+struct Js : Instruction {};
 
 template <id_t Expr>
 struct Label : Instruction {};
 
-template <id_t Expr>
-struct Lea {};
+template <typename Left, typename Right>
+struct Add : Instruction {};
 
 template <typename Left, typename Right>
-struct Add {};
-
-template <typename Left, typename Right>
-struct Sub {};
+struct Sub : Instruction {};
 
 template <id_t Left, typename Right>
 struct D : Instruction {};
 
 template <typename Expr>
-struct Inc {};
+struct Inc : Instruction {};
 
 template <typename Expr>
-struct Dec {};
-
-template <typename Expr>
-struct Mem {};
+struct Dec : Instruction {};
 
 template <typename Expr, typename... RestExpr>
 struct Program {};
@@ -148,26 +150,32 @@ class Computer {
     template <typename Ins, typename... Instructions>
     struct Declarations<Ins, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
-            static_assert(std::is_base_of<Instruction, Ins>::value,
+            static_assert(std::is_base_of_v<Instruction, Ins>,
                           "Program should contain only instructions!");
             Declarations<Instructions...>::declare_variables(mem, program_mem);
+        }
+    };
+
+    template <id_t id, auto num, typename... Rest>
+    struct Declarations<D<id, Num<num>>, Rest...> {
+        constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
+            int idx = Variables::add(id, program_mem.vars);
+            mem[idx] = num;
+
+            Declarations<Rest...>::declare_variables(mem, program_mem);
         }
     };
 
     template <id_t id, typename Val, typename... Rest>
     struct Declarations<D<id, Val>, Rest...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
-            int idx = Variables::add(id, program_mem.vars);
-            mem[idx] = Val::value;
-
-            Declarations<Rest...>::declare_variables(mem, program_mem);
+            static_assert(dependent_false<Val>::value, "D's second parameter should be Num");
         }
     };
 
     template <typename... Instructions>
     struct Evaluator {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            ;
             return program_mem.sough_label;
         }
     };
