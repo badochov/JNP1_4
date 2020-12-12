@@ -43,9 +43,7 @@ struct LValue {};
 struct Instruction {};
 
 template <auto N> // Tu pewnie trzeba cos zmienic
-struct Num : Numeric, PValue {
-    static const uint64_t value = N;
-};
+struct Num : Numeric, PValue {};
 
 template <id_t Expr>
 struct Lea : Numeric, PValue {};
@@ -121,7 +119,7 @@ class Computer {
             return -1;
         }
 
-        constexpr int& get(id_t id) {
+        constexpr int &get(id_t id) {
             return vars[id];
         }
 
@@ -211,17 +209,50 @@ class Computer {
         }
     };
 
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Jmp<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Jz<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0 && program_mem.ZF) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Js<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0 && program_mem.SF) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Mov<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            LValueEvaluator<L>::get_referecence(program_mem) = RValueEvaluator<R>::get_value(program_mem);
+            LValueEvaluator<L>::get_referecence(program_mem) =
+                RValueEvaluator<R>::get_value(program_mem);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
 
     template <typename L>
-    struct LValueEvaluator {
-    };
+    struct LValueEvaluator {};
 
     template <typename L>
     struct LValueEvaluator<Mem<L>> {
@@ -231,8 +262,7 @@ class Computer {
     };
 
     template <typename P>
-    struct RValueEvaluator {
-    };
+    struct RValueEvaluator {};
 
     template <auto id>
     struct RValueEvaluator<Num<id>> {
@@ -259,7 +289,7 @@ class Computer {
     template <typename P>
     constexpr static auto boot() {
         memory_t memory{0};
-        ASBProgram<P>::evaluate(memory);
-        return memory;
+        return ASBProgram<P>::evaluate(memory);
+        //        return memory;
     }
 };
