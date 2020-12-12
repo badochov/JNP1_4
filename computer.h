@@ -219,9 +219,8 @@ class Computer {
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Mov<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
-            LValueEvaluator<L>::get_reference(mem, program_mem);
-            //            =
-            RValueEvaluator<R>::get_value(program_mem);
+            LValueEvaluator<L>::get_reference(mem, program_mem) =
+                RValueEvaluator<R>::get_value(program_mem);
             return Evaluator<Instructions...>::evaluate(mem, program_mem);
         }
     };
