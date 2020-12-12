@@ -43,9 +43,7 @@ struct LValue {};
 struct Instruction {};
 
 template <auto N> // Tu pewnie trzeba cos zmienic
-struct Num : Numeric, PValue {
-    static const uint64_t value = N;
-};
+struct Num : Numeric, PValue {};
 
 template <id_t Expr>
 struct Lea : Numeric, PValue {};
@@ -133,7 +131,7 @@ class Computer {
             return -1;
         }
 
-        constexpr int& get(id_t id) {
+        constexpr int &get(id_t id) {
             return vars[id];
         }
 
@@ -240,6 +238,39 @@ class Computer {
         }
     };
 
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Jmp<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Jz<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0 && program_mem.ZF) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
+    template <id_t id, typename... Instructions>
+    struct Evaluator<Js<id>, Instructions...> {
+        constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
+            if (program_mem.sough_label == 0 && program_mem.SF) {
+                program_mem.sough_label = id;
+            }
+
+            return Evaluator<Instructions...>::evaluate(mem, program_mem);
+        }
+    };
+
     template <typename L, typename R, typename... Instructions>
     struct Evaluator<Sub<L, R>, Instructions...> {
         constexpr static id_t evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
@@ -297,8 +328,7 @@ class Computer {
     using Dec = Sub<L, Num<1>>;
 
     template <typename L>
-    struct LValueEvaluator {
-    };
+    struct LValueEvaluator {};
 
     template <typename L>
     struct LValueEvaluator<Mem<L>> {
@@ -308,8 +338,7 @@ class Computer {
     };
 
     template <typename P>
-    struct RValueEvaluator {
-    };
+    struct RValueEvaluator {};
 
     template <auto id>
     struct RValueEvaluator<Num<id>> {
