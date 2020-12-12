@@ -1,13 +1,11 @@
 #include "computer.h"
 
 int main() {
-    using b = Program<
+    using test_finite_loop = Program<
         Label<Id("loop")>,
         Inc<Mem<Lea<Id("MEM0")>>>,
         Js<Id("LOOP")>,
-        D<Id("mem0"), Num<-100>>>;
-
-
-     auto d = Computer<11, int>::boot<b>();
-
+        D<Id("mem0"), Num<-100>>
+    >;
+    constexpr auto test_finite_loop_res = Computer<4,int64_t>::boot<test_finite_loop>();
 }

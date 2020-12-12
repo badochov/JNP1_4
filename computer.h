@@ -94,32 +94,52 @@ template <std::size_t size, typename MemoryWordType>
 class Computer {
     using memory_t = std::array<MemoryWordType, size>;
 
-    using vars_memory_t = std::array<identifier_t, size>;
-
-    using asb_program_memory_t = struct ASBProgramMemory{
+    using asb_program_memory_t = struct ASBProgramMemory {
         using flag_t = bool;
+
+        using vars_memory_t = std::array<identifier_t, size>;
+        using vars_size_t = typename vars_memory_t::size_type;
         vars_memory_t vars{0};
+
         identifier_t sought_label = 0;
         flag_t ZF = false;
         flag_t SF = false;
 
-        constexpr int add(identifier_t id) {
-            for (std::size_t i = 0; i < size; i++) {
+        constexpr vars_size_t add(identifier_t id) {
+            vars_size_t res = 0;
+            bool found = false;
+            for (vars_size_t i = 0; i < size; i++) {
                 if (vars[i] == 0) {
                     vars[i] = id;
-                    return i;
+                    found = true;
+                    res = i;
+                    break;
                 }
             }
-            return -1;
+
+            if (found) {
+                return res;
+            } else {
+                assert(((void)"Too many variables", false));
+            }
         }
 
-        constexpr int idx(identifier_t id) {
-            for (std::size_t i = 0; i < size; i++) {
+        constexpr vars_size_t idx(identifier_t id) {
+            vars_size_t res = 0;
+            bool found = false;
+            for (vars_size_t i = 0; i < size; i++) {
                 if (vars[i] == id) {
-                    return i;
+                    found = true;
+                    res = i;
+                    break;
                 }
             }
-            return -1;
+
+            if (found) {
+                return res;
+            } else {
+                assert(((void)"Variable not found", false));
+            }
         }
 
         constexpr void set_flag_ZF(MemoryWordType value) {
@@ -150,7 +170,7 @@ class Computer {
         constexpr static auto evaluate(memory_t &mem) {
             asb_program_memory_t asb_program_memory{};
             Declarations<Instructions...>::declare_variables(mem, asb_program_memory);
-            auto id = asb_program_memory.sought_label;
+            identifier_t id = 0;
             do {
                 Evaluator<Instructions...>::evaluate(mem, asb_program_memory);
                 id = asb_program_memory.sought_label;
@@ -179,7 +199,7 @@ class Computer {
     template <identifier_t id, auto num, typename... Instructions>
     struct Declarations<D<id, Num<num>>, Instructions...> {
         constexpr static void declare_variables(memory_t &mem, asb_program_memory_t &program_mem) {
-            int idx = program_mem.add(id);
+            auto idx = program_mem.add(id);
             mem[idx] = num;
 
             Declarations<Instructions...>::declare_variables(mem, program_mem);
