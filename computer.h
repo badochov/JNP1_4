@@ -96,7 +96,7 @@ class Computer {
 
     using vars_memory_t = std::array<identifier_t, size>;
 
-    using asb_program_memory_t = struct {
+    using asb_program_memory_t = struct ASBProgramMemory{
         using flag_t = bool;
         vars_memory_t vars{0};
         identifier_t sought_label = 0;
@@ -197,7 +197,7 @@ class Computer {
     struct Evaluator {
         constexpr static void evaluate(memory_t &mem, asb_program_memory_t &program_mem) {
             if (!program_mem.not_searching_for_label()) {
-                assert(((void *)"Label not found", false));
+                assert(((void)"Label not found", false));
             }
         }
     };
