@@ -1,6 +1,7 @@
 **/.idea
 /cmake-build-debug
 
+/jnp4tests
 init_table.cc
 type_add.cc
 CMakeLists.txt
